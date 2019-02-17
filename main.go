@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"library/memcache"
 )
 
@@ -11,17 +10,36 @@ func main() {
 		panic(err)
 	}
 	i := &memcache.Item{
-		Key:   "userId",
-		Value: []byte("aaa"),
+		Key:   "userId2",
+		Value: []byte("aaa2"),
 	}
-	item, err := c.Action("set", i, "userId")
+	err = c.Set(i)
 	if err != nil {
 		panic(err)
 	}
-	item, err = c.Action("get", nil, "userId")
+	//i := &memcache.Item{
+	//	Key:   "userId",
+	//	Value: []byte("aaa"),
+	//}
+	//err = c.Add(i)
+	//if err != nil {
+	//	panic(err)
+	//}
+	//i := &memcache.Item{
+	//	Key:   "userId",
+	//	Value: []byte("aaa111bbb"),
+	//}
+	//err = c.Replace(i)
+	//if err != nil {
+	//	panic(err)
+	//}
+	err = c.Delete("userId1")
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(i.Value)
-	fmt.Println(string(item.Value))
+	//i, err = c.Get("userId2")
+	//if err != nil {
+	//	panic(err)
+	//}
+	//fmt.Println(string(i.Value))
 }
