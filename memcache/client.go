@@ -10,28 +10,17 @@ import (
 )
 
 var (
-	crlf         = []byte("\r\n")
-	space        = []byte(" ")
-	resultStored = []byte("STORED\r\n")
-	resultEnd    = []byte("END\r\n")
+	crlf          = []byte("\r\n")
+	space         = []byte(" ")
+	resultStored  = []byte("STORED\r\n")
+	resultEnd     = []byte("END\r\n")
+	resultDeleted = []byte("DELETED\r\n")
 )
-
-// conn is a connection to a server.
-type conn struct {
-	nc     net.Conn
-	rw     *bufio.ReadWriter
-	addr   net.Addr
-	Client *Client
-}
 
 // Client is a memcache client.
 type Client struct {
 	nc net.Conn
 	rw *bufio.ReadWriter
-	//Timeout      time.Duration
-	//MaxIdleConns int
-	//lk           sync.Mutex
-	//freeconn     map[string][]*conn
 }
 
 // Item is an item to be got or stored in a memcached server.
@@ -54,17 +43,68 @@ func GetClient(host string) (*Client, error) {
 	}, nil
 }
 
-func (c *Client) Action(act string, storeItem *Item, key string) (getItem *Item, err error) {
-	switch act {
-	case "add", "set", "replace", "cas":
-		return nil, c.actionCommon(c.rw, act, storeItem)
-	case "get":
-		actionGet(c.rw, []string{key}, func(item *Item) {
-			getItem = item
-		})
-		return getItem, nil
+//Add add action
+func (c *Client) Add(storeItem *Item) (err error) {
+	return c.actionCommon(c.rw, "add", storeItem)
+}
+
+//Set set action
+func (c *Client) Set(storeItem *Item) (err error) {
+	return c.actionCommon(c.rw, "set", storeItem)
+}
+
+//Replace replace actioin
+func (c *Client) Replace(storeItem *Item) (err error) {
+	return c.actionCommon(c.rw, "replace", storeItem)
+}
+
+//Cas cas action
+func (c *Client) Cas(storeItem *Item) (err error) {
+	return c.actionCommon(c.rw, "cas", storeItem)
+}
+
+//Get get action
+func (c *Client) Get(key string) (getItem *Item, err error) {
+	err = actionGet(c.rw, []string{key}, func(item *Item) {
+		getItem = item
+	})
+	return
+}
+
+//Delete delete action
+func (c *Client) Delete(key string) error {
+	line, err := writeReadLine(c.rw, "delete %s\r\n", key)
+	if err != nil {
+		return err
 	}
-	return nil, nil
+	if bytes.Equal(line, resultDeleted) {
+		return nil
+	}
+	return fmt.Errorf(string(line))
+}
+
+//Flush flush all action
+func (c *Client) Flush(key string) error {
+	line, err := writeReadLine(c.rw, "flush_all \r\n", key)
+	if err != nil {
+		return err
+	}
+	if bytes.Equal(line, resultDeleted) {
+		return nil
+	}
+	return fmt.Errorf(string(line))
+}
+
+func writeReadLine(rw *bufio.ReadWriter, format string, args ...interface{}) ([]byte, error) {
+	_, err := fmt.Fprintf(rw, format, args...)
+	if err != nil {
+		return nil, err
+	}
+	if err := rw.Flush(); err != nil {
+		return nil, err
+	}
+	line, err := rw.ReadSlice('\n')
+	return line, err
 }
 
 func actionGet(rw *bufio.ReadWriter, keys []string, cb func(*Item)) error {
