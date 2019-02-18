@@ -3,6 +3,7 @@ package memcache
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -17,19 +18,38 @@ var (
 	resultDeleted = []byte("DELETED\r\n")
 )
 
+const (
+	//FlagRaw default flag byte value
+	FlagRaw = 0
+	//FlagJson json value
+	FlagJson = 1
+)
+
 // Client is a memcache client.
 type Client struct {
 	nc net.Conn
 	rw *bufio.ReadWriter
+	//json encode buf
+	ebuf bytes.Buffer
+	je   *json.Encoder
+	jd   *json.Decoder
+	jr   bytes.Reader
 }
 
 // Item is an item to be got or stored in a memcached server.
 type Item struct {
-	Key        string
-	Value      []byte
-	Flags      uint32
+	//Key key
+	Key string
+	//Value binary value
+	Value []byte
+	//Object encode value
+	Object interface{}
+	//Flags item's type
+	Flags uint32
+	//Expiration value expiration
 	Expiration int32
-	casid      uint64
+	//casid casid
+	casid uint64
 }
 
 func GetClient(host string) (*Client, error) {
@@ -37,10 +57,13 @@ func GetClient(host string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{
+	c := &Client{
 		nc: nc,
 		rw: bufio.NewReadWriter(bufio.NewReader(nc), bufio.NewWriter(nc)),
-	}, nil
+	}
+	c.je = json.NewEncoder(&c.ebuf)
+	c.jd = json.NewDecoder(&c.jr)
+	return c, nil
 }
 
 //Add add action
@@ -68,6 +91,14 @@ func (c *Client) Get(key string) (getItem *Item, err error) {
 	err = actionGet(c.rw, []string{key}, func(item *Item) {
 		getItem = item
 	})
+	return
+}
+
+//Scan get item
+func (c *Client) Scan(item *Item, v interface{}) (err error) {
+	if err = c.decode(item, v); err != nil {
+		return
+	}
 	return
 }
 
@@ -170,9 +201,45 @@ func parseGetResponse(line []byte, it *Item) (count int, err error) {
 	return count, nil
 }
 
+func (c *Client) encode(item *Item) (value []byte, err error) {
+	switch item.Flags {
+	case FlagRaw:
+		value = item.Value
+	case FlagJson:
+		c.ebuf.Reset()
+		if err = c.je.Encode(item.Object); err != nil {
+			return
+		}
+		value = c.ebuf.Bytes()
+	default:
+		value = item.Value
+	}
+	return value, nil
+}
+
+func (c *Client) decode(item *Item, v interface{}) (err error) {
+	switch item.Flags {
+	case FlagJson:
+		c.jr.Reset(item.Value)
+		err = c.jd.Decode(v)
+	default:
+		switch v.(type) {
+		case *[]byte:
+
+		}
+	}
+	return
+}
+
 //actionCommon common action for set add replace add cas
-func (c *Client) actionCommon(rw *bufio.ReadWriter, act string, item *Item) error {
-	var err error
+func (c *Client) actionCommon(rw *bufio.ReadWriter, act string, item *Item) (err error) {
+	var (
+		value []byte
+	)
+	if value, err = c.encode(item); err != nil {
+		return
+	}
+	item.Value = value
 	if act == "cas" {
 		_, err = fmt.Fprintf(rw, "%s %s %d %d %d %d\r\n",
 			act, item.Key, item.Flags, item.Expiration, len(item.Value), item.casid)
