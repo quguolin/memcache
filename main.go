@@ -1,17 +1,31 @@
 package main
 
 import (
+	"fmt"
 	"library/memcache"
 )
+
+type User struct {
+	Name      string
+	IsAdmin   bool
+	Followers uint
+}
 
 func main() {
 	c, err := memcache.GetClient("127.0.0.1:11211")
 	if err != nil {
 		panic(err)
 	}
+	user := User{
+		Name:      "cizixs",
+		IsAdmin:   true,
+		Followers: 36,
+	}
+
 	i := &memcache.Item{
-		Key:   "userId2",
-		Value: []byte("aaa2"),
+		Key:    "userId2",
+		Object: user,
+		Flags:  memcache.FlagJson,
 	}
 	err = c.Set(i)
 	if err != nil {
@@ -33,13 +47,15 @@ func main() {
 	//if err != nil {
 	//	panic(err)
 	//}
-	err = c.Delete("userId1")
-	if err != nil {
-		panic(err)
-	}
-	//i, err = c.Get("userId2")
+	//err = c.Delete("userId1")
 	//if err != nil {
 	//	panic(err)
 	//}
-	//fmt.Println(string(i.Value))
+	i, err = c.Get("userId2")
+	if err != nil {
+		panic(err)
+	}
+	u := &User{}
+	c.Scan(i, u)
+	fmt.Println(u)
 }
