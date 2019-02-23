@@ -29,11 +29,14 @@ const (
 type Client struct {
 	nc net.Conn
 	rw *bufio.ReadWriter
-	//json encode buf
+	//ebuf json encode buf
 	ebuf bytes.Buffer
-	je   *json.Encoder
-	jd   *json.Decoder
-	jr   bytes.Reader
+	//je json encoder
+	je *json.Encoder
+	//jd json decoder
+	jd *json.Decoder
+	//jr bytes reader
+	jr bytes.Reader
 }
 
 // Item is an item to be got or stored in a memcached server.
@@ -87,9 +90,12 @@ func (c *Client) Cas(storeItem *Item) (err error) {
 }
 
 //Get get action
-func (c *Client) Get(key string) (getItem *Item, err error) {
+func (c *Client) Get(key string) (i *Item, err error) {
 	err = actionGet(c.rw, []string{key}, func(item *Item) {
-		getItem = item
+		if err = c.Scan(item, &item.Object); err != nil {
+			return
+		}
+		i = item
 	})
 	return
 }
