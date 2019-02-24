@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -11,11 +12,19 @@ import (
 )
 
 var (
-	crlf          = []byte("\r\n")
-	space         = []byte(" ")
-	resultStored  = []byte("STORED\r\n")
-	resultEnd     = []byte("END\r\n")
-	resultDeleted = []byte("DELETED\r\n")
+	ErrNotStored   = errors.New("memcache: item not stored")
+	ErrCASConflict = errors.New("memcache: compare-and-swap conflict")
+	ErrCacheMiss   = errors.New("memcache: cache miss")
+)
+var (
+	crlf            = []byte("\r\n")
+	space           = []byte(" ")
+	resultStored    = []byte("STORED\r\n")
+	resultNotStored = []byte("NOT_STORED\r\n")
+	resultExists    = []byte("EXISTS\r\n")
+	resultNotFound  = []byte("NOT_FOUND\r\n")
+	resultEnd       = []byte("END\r\n")
+	resultDeleted   = []byte("DELETED\r\n")
 )
 
 const (
@@ -51,8 +60,8 @@ type Item struct {
 	Flags uint32
 	//Expiration value expiration
 	Expiration int32
-	//casid casid
-	casid uint64
+	//Casid Casid
+	Casid uint64
 }
 
 func GetClient(host string) (*Client, error) {
@@ -195,7 +204,7 @@ func actionGetResponse(r *bufio.Reader, cb func(*Item)) error {
 func parseGetResponse(line []byte, it *Item) (count int, err error) {
 	rule := "VALUE %s %d %d %d\r\n"
 	//gets command will return cas ID
-	dest := []interface{}{&it.Key, &it.Flags, &count, &it.casid}
+	dest := []interface{}{&it.Key, &it.Flags, &count, &it.Casid}
 	if bytes.Count(line, space) == 3 {
 		rule = "VALUE %s %d %d\r\n"
 		dest = dest[:3]
@@ -248,7 +257,7 @@ func (c *Client) actionCommon(rw *bufio.ReadWriter, act string, item *Item) (err
 	item.Value = value
 	if act == "cas" {
 		_, err = fmt.Fprintf(rw, "%s %s %d %d %d %d\r\n",
-			act, item.Key, item.Flags, item.Expiration, len(item.Value), item.casid)
+			act, item.Key, item.Flags, item.Expiration, len(item.Value), item.Casid)
 	} else {
 		_, err = fmt.Fprintf(rw, "%s %s %d %d %d\r\n",
 			act, item.Key, item.Flags, item.Expiration, len(item.Value))
@@ -272,7 +281,12 @@ func (c *Client) actionCommon(rw *bufio.ReadWriter, act string, item *Item) (err
 	switch {
 	case bytes.Equal(line, resultStored):
 		return nil
-	default:
-		return fmt.Errorf(string(line))
+	case bytes.Equal(line, resultNotStored):
+		return ErrNotStored
+	case bytes.Equal(line, resultExists):
+		return ErrCASConflict
+	case bytes.Equal(line, resultNotFound):
+		return ErrCacheMiss
 	}
+	return fmt.Errorf("memcache: unexpected response line: %q", string(line))
 }
