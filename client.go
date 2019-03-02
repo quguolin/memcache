@@ -22,6 +22,7 @@ var (
 	resultStored    = []byte("STORED\r\n")
 	resultNotStored = []byte("NOT_STORED\r\n")
 	resultExists    = []byte("EXISTS\r\n")
+	resultOK        = []byte("OK\r\n")
 	resultNotFound  = []byte("NOT_FOUND\r\n")
 	resultEnd       = []byte("END\r\n")
 	resultDeleted   = []byte("DELETED\r\n")
@@ -64,7 +65,7 @@ type Item struct {
 	Casid uint64
 }
 
-func GetClient(host string) (*Client, error) {
+func New(host string) (*Client, error) {
 	nc, err := net.Dial("tcp", host)
 	if err != nil {
 		return nil, err
@@ -78,14 +79,14 @@ func GetClient(host string) (*Client, error) {
 	return c, nil
 }
 
-//Add add action
-func (c *Client) Add(storeItem *Item) (err error) {
-	return c.actionCommon(c.rw, "add", storeItem)
-}
-
 //Set set action
 func (c *Client) Set(storeItem *Item) (err error) {
 	return c.actionCommon(c.rw, "set", storeItem)
+}
+
+//Add add action
+func (c *Client) Add(storeItem *Item) (err error) {
+	return c.actionCommon(c.rw, "add", storeItem)
 }
 
 //Replace replace actioin
@@ -101,9 +102,6 @@ func (c *Client) Cas(storeItem *Item) (err error) {
 //Get get action
 func (c *Client) Get(key string) (i *Item, err error) {
 	err = actionGet(c.rw, []string{key}, func(item *Item) {
-		if err = c.Scan(item, &item.Object); err != nil {
-			return
-		}
 		i = item
 	})
 	return
@@ -130,12 +128,12 @@ func (c *Client) Delete(key string) error {
 }
 
 //Flush flush all action
-func (c *Client) Flush(key string) error {
-	line, err := writeReadLine(c.rw, "flush_all \r\n", key)
+func (c *Client) Flush() error {
+	line, err := writeReadLine(c.rw, "flush_all \r\n")
 	if err != nil {
 		return err
 	}
-	if bytes.Equal(line, resultDeleted) {
+	if bytes.Equal(line, resultOK) {
 		return nil
 	}
 	return fmt.Errorf(string(line))
