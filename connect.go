@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"sync"
 )
 
 var (
@@ -46,7 +47,8 @@ type Connect struct {
 	//jd json decoder
 	jd *json.Decoder
 	//jr bytes reader
-	jr bytes.Reader
+	jr  bytes.Reader
+	mux sync.Mutex
 }
 
 func New(host string) (*Connect, error) {
@@ -85,6 +87,7 @@ func (c *Connect) Cas(storeItem *Item) (err error) {
 
 //Get get action
 func (c *Connect) Get(key string) (i *Item, err error) {
+	defer c.Close()
 	err = actionGet(c.rw, []string{key}, func(item *Item) {
 		i = item
 	})
@@ -97,6 +100,13 @@ func (c *Connect) Scan(item *Item, v interface{}) (err error) {
 		return
 	}
 	return
+}
+
+func (c *Connect) Close() error {
+	c.mux.Lock()
+	err := c.nc.Close()
+	c.mux.Unlock()
+	return err
 }
 
 //Delete delete action
@@ -230,6 +240,7 @@ func (c *Connect) decode(item *Item, v interface{}) (err error) {
 
 //actionCommon common action for set add replace add cas
 func (c *Connect) actionCommon(rw *bufio.ReadWriter, act string, item *Item) (err error) {
+	defer c.Close()
 	var (
 		value []byte
 	)
