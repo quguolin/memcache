@@ -15,7 +15,7 @@ var (
 	expire int32 = 100
 )
 
-func NewClient() *Client {
+func NewConnect() *Connect {
 	c, err := New(host)
 	if err != nil {
 		panic(err)
@@ -23,7 +23,7 @@ func NewClient() *Client {
 	return c
 }
 
-func TestClient_Scan(t *testing.T) {
+func TestConnect_Scan(t *testing.T) {
 	type student struct {
 		Name   string
 		Gender string
@@ -34,7 +34,7 @@ func TestClient_Scan(t *testing.T) {
 		Gender: "boy",
 		Age:    20,
 	}
-	c := NewClient()
+	c := NewConnect()
 	item := &Item{
 		Key:        key,
 		Object:     s,
@@ -66,8 +66,8 @@ func TestClient_Scan(t *testing.T) {
 	}
 }
 
-func TestClient_Flush(t *testing.T) {
-	c := NewClient()
+func TestConnect_Flush(t *testing.T) {
+	c := NewConnect()
 	item := &Item{
 		Key:        key,
 		Value:      []byte(value),
@@ -95,8 +95,8 @@ func TestClient_Flush(t *testing.T) {
 	}
 }
 
-func TestClient_Delete(t *testing.T) {
-	c := NewClient()
+func TestConnect_Delete(t *testing.T) {
+	c := NewConnect()
 	item := &Item{
 		Key:        key,
 		Value:      []byte(value),
@@ -124,8 +124,8 @@ func TestClient_Delete(t *testing.T) {
 	}
 }
 
-func TestClient_Cas(t *testing.T) {
-	c := NewClient()
+func TestConnect_Cas(t *testing.T) {
+	c := NewConnect()
 	item, err := c.Get(key)
 	if err != nil {
 		t.Errorf(err.Error())
@@ -152,8 +152,8 @@ func TestClient_Cas(t *testing.T) {
 	}
 }
 
-func TestClient_Get(t *testing.T) {
-	c := NewClient()
+func TestConnect_Get(t *testing.T) {
+	c := NewConnect()
 	item, err := c.Get(key)
 	if err != nil {
 		t.Errorf(err.Error())
@@ -166,8 +166,8 @@ func TestClient_Get(t *testing.T) {
 	t.Log("pass")
 }
 
-func TestClient_Replace(t *testing.T) {
-	c := NewClient()
+func TestConnect_Replace(t *testing.T) {
+	c := NewConnect()
 	item := &Item{
 		Key:        key,
 		Value:      []byte(value),
@@ -195,8 +195,8 @@ func TestClient_Replace(t *testing.T) {
 	t.Log("pass")
 }
 
-func TestClient_Add(t *testing.T) {
-	c := NewClient()
+func TestConnect_Add(t *testing.T) {
+	c := NewConnect()
 	item := &Item{
 		Key:        key,
 		Value:      []byte(value),
@@ -224,8 +224,8 @@ func TestClient_Add(t *testing.T) {
 	t.Log("pass")
 }
 
-func TestClient_Set(t *testing.T) {
-	c := NewClient()
+func TestConnect_Set(t *testing.T) {
+	c := NewConnect()
 	item := &Item{
 		Key:        key,
 		Value:      []byte(value),

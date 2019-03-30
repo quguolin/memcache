@@ -35,8 +35,8 @@ const (
 	FlagJson = 1
 )
 
-// Client is a memcache client.
-type Client struct {
+// Connect is a memcache client.
+type Connect struct {
 	nc net.Conn
 	rw *bufio.ReadWriter
 	//ebuf json encode buf
@@ -49,28 +49,12 @@ type Client struct {
 	jr bytes.Reader
 }
 
-// Item is an item to be got or stored in a memcached server.
-type Item struct {
-	//Key key
-	Key string
-	//Value binary value
-	Value []byte
-	//Object encode value
-	Object interface{}
-	//Flags item's type
-	Flags uint32
-	//Expiration value expiration
-	Expiration int32
-	//Casid Casid
-	Casid uint64
-}
-
-func New(host string) (*Client, error) {
+func New(host string) (*Connect, error) {
 	nc, err := net.Dial("tcp", host)
 	if err != nil {
 		return nil, err
 	}
-	c := &Client{
+	c := &Connect{
 		nc: nc,
 		rw: bufio.NewReadWriter(bufio.NewReader(nc), bufio.NewWriter(nc)),
 	}
@@ -80,27 +64,27 @@ func New(host string) (*Client, error) {
 }
 
 //Set set action
-func (c *Client) Set(storeItem *Item) (err error) {
+func (c *Connect) Set(storeItem *Item) (err error) {
 	return c.actionCommon(c.rw, "set", storeItem)
 }
 
 //Add add action
-func (c *Client) Add(storeItem *Item) (err error) {
+func (c *Connect) Add(storeItem *Item) (err error) {
 	return c.actionCommon(c.rw, "add", storeItem)
 }
 
 //Replace replace actioin
-func (c *Client) Replace(storeItem *Item) (err error) {
+func (c *Connect) Replace(storeItem *Item) (err error) {
 	return c.actionCommon(c.rw, "replace", storeItem)
 }
 
 //Cas cas action
-func (c *Client) Cas(storeItem *Item) (err error) {
+func (c *Connect) Cas(storeItem *Item) (err error) {
 	return c.actionCommon(c.rw, "cas", storeItem)
 }
 
 //Get get action
-func (c *Client) Get(key string) (i *Item, err error) {
+func (c *Connect) Get(key string) (i *Item, err error) {
 	err = actionGet(c.rw, []string{key}, func(item *Item) {
 		i = item
 	})
@@ -108,7 +92,7 @@ func (c *Client) Get(key string) (i *Item, err error) {
 }
 
 //Scan get item
-func (c *Client) Scan(item *Item, v interface{}) (err error) {
+func (c *Connect) Scan(item *Item, v interface{}) (err error) {
 	if err = c.decode(item, v); err != nil {
 		return
 	}
@@ -116,7 +100,7 @@ func (c *Client) Scan(item *Item, v interface{}) (err error) {
 }
 
 //Delete delete action
-func (c *Client) Delete(key string) error {
+func (c *Connect) Delete(key string) error {
 	line, err := writeReadLine(c.rw, "delete %s\r\n", key)
 	if err != nil {
 		return err
@@ -128,7 +112,7 @@ func (c *Client) Delete(key string) error {
 }
 
 //Flush flush all action
-func (c *Client) Flush() error {
+func (c *Connect) Flush() error {
 	line, err := writeReadLine(c.rw, "flush_all \r\n")
 	if err != nil {
 		return err
@@ -214,7 +198,7 @@ func parseGetResponse(line []byte, it *Item) (count int, err error) {
 	return count, nil
 }
 
-func (c *Client) encode(item *Item) (value []byte, err error) {
+func (c *Connect) encode(item *Item) (value []byte, err error) {
 	switch item.Flags {
 	case FlagRaw:
 		value = item.Value
@@ -230,7 +214,7 @@ func (c *Client) encode(item *Item) (value []byte, err error) {
 	return value, nil
 }
 
-func (c *Client) decode(item *Item, v interface{}) (err error) {
+func (c *Connect) decode(item *Item, v interface{}) (err error) {
 	switch item.Flags {
 	case FlagJson:
 		c.jr.Reset(item.Value)
@@ -245,7 +229,7 @@ func (c *Client) decode(item *Item, v interface{}) (err error) {
 }
 
 //actionCommon common action for set add replace add cas
-func (c *Client) actionCommon(rw *bufio.ReadWriter, act string, item *Item) (err error) {
+func (c *Connect) actionCommon(rw *bufio.ReadWriter, act string, item *Item) (err error) {
 	var (
 		value []byte
 	)
