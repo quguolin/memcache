@@ -240,7 +240,6 @@ func (c *Connect) decode(item *Item, v interface{}) (err error) {
 
 //actionCommon common action for set add replace add cas
 func (c *Connect) actionCommon(rw *bufio.ReadWriter, act string, item *Item) (err error) {
-	defer c.Close()
 	var (
 		value []byte
 	)

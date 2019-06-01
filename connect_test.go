@@ -35,6 +35,7 @@ func TestConnect_Scan(t *testing.T) {
 		Age:    20,
 	}
 	c := NewConnect()
+	defer c.Close()
 	item := &Item{
 		Key:        key,
 		Object:     s,
@@ -68,6 +69,7 @@ func TestConnect_Scan(t *testing.T) {
 
 func TestConnect_Flush(t *testing.T) {
 	c := NewConnect()
+	defer c.Close()
 	item := &Item{
 		Key:        key,
 		Value:      []byte(value),
@@ -97,6 +99,7 @@ func TestConnect_Flush(t *testing.T) {
 
 func TestConnect_Delete(t *testing.T) {
 	c := NewConnect()
+	defer c.Close()
 	item := &Item{
 		Key:        key,
 		Value:      []byte(value),
@@ -126,6 +129,7 @@ func TestConnect_Delete(t *testing.T) {
 
 func TestConnect_Cas(t *testing.T) {
 	c := NewConnect()
+	defer c.Close()
 	item, err := c.Get(key)
 	if err != nil {
 		t.Errorf(err.Error())
@@ -154,6 +158,7 @@ func TestConnect_Cas(t *testing.T) {
 
 func TestConnect_Get(t *testing.T) {
 	c := NewConnect()
+	defer c.Close()
 	item, err := c.Get(key)
 	if err != nil {
 		t.Errorf(err.Error())
@@ -168,6 +173,7 @@ func TestConnect_Get(t *testing.T) {
 
 func TestConnect_Replace(t *testing.T) {
 	c := NewConnect()
+	defer c.Close()
 	item := &Item{
 		Key:        key,
 		Value:      []byte(value),
@@ -197,6 +203,7 @@ func TestConnect_Replace(t *testing.T) {
 
 func TestConnect_Add(t *testing.T) {
 	c := NewConnect()
+	defer c.Close()
 	item := &Item{
 		Key:        key,
 		Value:      []byte(value),
@@ -226,6 +233,7 @@ func TestConnect_Add(t *testing.T) {
 
 func TestConnect_Set(t *testing.T) {
 	c := NewConnect()
+	defer c.Close()
 	item := &Item{
 		Key:        key,
 		Value:      []byte(value),
