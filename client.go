@@ -11,8 +11,8 @@ type Result struct {
 	err  error
 }
 
-func NewClient(host string) *Client {
-	conn, err := New(host)
+func NewClient(config *Config) *Client {
+	conn, err := New(config)
 	if err != nil {
 		panic(err)
 	}
