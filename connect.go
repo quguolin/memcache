@@ -101,6 +101,9 @@ func (c *Connect) Get(key string) (i *Item, err error) {
 	err = c.actionGet(c.rw, []string{key}, func(item *Item) {
 		i = item
 	})
+	if i == nil{
+		return nil,fmt.Errorf(string(resultNotFound))
+	}
 	return
 }
 
