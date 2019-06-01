@@ -3,9 +3,14 @@ package memcache
 import (
 	"bytes"
 	"testing"
+	"time"
 )
 
-const host = "127.0.0.1:11211"
+const (
+	host = "127.0.0.1:11211"
+	rTimeout = time.Duration(5*time.Millisecond)
+	wTimeout = time.Duration(5*time.Millisecond)
+)
 
 var (
 	key          = "city"
@@ -16,7 +21,11 @@ var (
 )
 
 func NewConnect() *Connect {
-	c, err := New(host)
+	c, err := New(&Config{
+		host:host,
+		readTimeout:rTimeout,
+		writeTimeout:wTimeout,
+	})
 	if err != nil {
 		panic(err)
 	}
@@ -129,8 +138,19 @@ func TestConnect_Delete(t *testing.T) {
 
 func TestConnect_Cas(t *testing.T) {
 	c := NewConnect()
-	defer c.Close()
-	item, err := c.Get(key)
+	//defer c.Close()
+	item := &Item{
+		Key:        key,
+		Value:      []byte(value),
+		Flags:      FlagRaw,
+		Expiration: expire,
+	}
+	err := c.Set(item)
+	if err != nil {
+		t.Errorf(err.Error())
+		return
+	}
+	item, err = c.Get(key)
 	if err != nil {
 		t.Errorf(err.Error())
 		return
@@ -159,7 +179,24 @@ func TestConnect_Cas(t *testing.T) {
 func TestConnect_Get(t *testing.T) {
 	c := NewConnect()
 	defer c.Close()
-	item, err := c.Get(key)
+	s := student{
+		Name:   "Moor",
+		Gender: "boy",
+		Age:    20,
+	}
+	item := &Item{
+		Key:        key,
+		Object:     s,
+		Flags:      FlagJson,
+		Expiration: expire,
+	}
+	err := c.Set(item)
+
+	if err != nil {
+		t.Errorf(err.Error())
+		return
+	}
+	item, err = c.Get(key)
 	if err != nil {
 		t.Errorf(err.Error())
 		return
@@ -201,16 +238,22 @@ func TestConnect_Replace(t *testing.T) {
 	t.Log("pass")
 }
 
+
 func TestConnect_Add(t *testing.T) {
 	c := NewConnect()
 	defer c.Close()
+	err := c.Flush()
+	if err != nil {
+		t.Errorf(err.Error())
+		return
+	}
 	item := &Item{
 		Key:        key,
 		Value:      []byte(value),
 		Flags:      FlagRaw,
 		Expiration: expire,
 	}
-	err := c.Add(item)
+	err = c.Add(item)
 	if err != nil {
 		t.Errorf(err.Error())
 		return

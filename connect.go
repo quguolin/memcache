@@ -10,6 +10,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 )
 
 var (
@@ -39,6 +40,8 @@ const (
 // Connect is a memcache client.
 type Connect struct {
 	nc net.Conn
+	readTimeout time.Duration
+	writeTimeout time.Duration
 	rw *bufio.ReadWriter
 	//ebuf json encode buf
 	ebuf bytes.Buffer
@@ -51,14 +54,22 @@ type Connect struct {
 	mux sync.Mutex
 }
 
-func New(host string) (*Connect, error) {
-	nc, err := net.Dial("tcp", host)
+type Config struct {
+	host string
+	readTimeout time.Duration
+	writeTimeout time.Duration
+}
+
+func New(config *Config) (*Connect, error) {
+	nc, err := net.Dial("tcp", config.host)
 	if err != nil {
 		return nil, err
 	}
 	c := &Connect{
 		nc: nc,
 		rw: bufio.NewReadWriter(bufio.NewReader(nc), bufio.NewWriter(nc)),
+		readTimeout:config.readTimeout,
+		writeTimeout:config.writeTimeout,
 	}
 	c.je = json.NewEncoder(&c.ebuf)
 	c.jd = json.NewDecoder(&c.jr)
@@ -87,10 +98,12 @@ func (c *Connect) Cas(storeItem *Item) (err error) {
 
 //Get get action
 func (c *Connect) Get(key string) (i *Item, err error) {
-	defer c.Close()
-	err = actionGet(c.rw, []string{key}, func(item *Item) {
+	err = c.actionGet(c.rw, []string{key}, func(item *Item) {
 		i = item
 	})
+	if i == nil{
+		return nil,fmt.Errorf(string(resultNotFound))
+	}
 	return
 }
 
@@ -111,7 +124,7 @@ func (c *Connect) Close() error {
 
 //Delete delete action
 func (c *Connect) Delete(key string) error {
-	line, err := writeReadLine(c.rw, "delete %s\r\n", key)
+	line, err := c.writeReadLine(c.rw, "delete %s\r\n", key)
 	if err != nil {
 		return err
 	}
@@ -123,7 +136,7 @@ func (c *Connect) Delete(key string) error {
 
 //Flush flush all action
 func (c *Connect) Flush() error {
-	line, err := writeReadLine(c.rw, "flush_all \r\n")
+	line, err := c.writeReadLine(c.rw, "flush_all \r\n")
 	if err != nil {
 		return err
 	}
@@ -133,7 +146,8 @@ func (c *Connect) Flush() error {
 	return fmt.Errorf(string(line))
 }
 
-func writeReadLine(rw *bufio.ReadWriter, format string, args ...interface{}) ([]byte, error) {
+func (c *Connect)writeReadLine(rw *bufio.ReadWriter, format string, args ...interface{}) ([]byte, error) {
+	c.setWTimeout()
 	_, err := fmt.Fprintf(rw, format, args...)
 	if err != nil {
 		return nil, err
@@ -141,24 +155,27 @@ func writeReadLine(rw *bufio.ReadWriter, format string, args ...interface{}) ([]
 	if err := rw.Flush(); err != nil {
 		return nil, err
 	}
+	c.setRTimeout()
 	line, err := rw.ReadSlice('\n')
 	return line, err
 }
 
-func actionGet(rw *bufio.ReadWriter, keys []string, cb func(*Item)) error {
+func (c *Connect) actionGet(rw *bufio.ReadWriter, keys []string, cb func(*Item)) error {
+	c.setWTimeout()
 	if _, err := fmt.Fprintf(rw, "gets %s\r\n", strings.Join(keys, " ")); err != nil {
 		return err
 	}
 	if err := rw.Flush(); err != nil {
 		return err
 	}
-	if err := actionGetResponse(rw.Reader, cb); err != nil {
+	if err := c.actionGetResponse(rw.Reader, cb); err != nil {
 		return err
 	}
 	return nil
 }
 
-func actionGetResponse(r *bufio.Reader, cb func(*Item)) error {
+func (c *Connect) actionGetResponse(r *bufio.Reader, cb func(*Item)) error {
+	c.setRTimeout()
 	for {
 		//oneline is end with \n\r
 		line, err := r.ReadSlice('\n')
@@ -238,6 +255,20 @@ func (c *Connect) decode(item *Item, v interface{}) (err error) {
 	return
 }
 
+//setRTimeout set net read timeout
+func (c *Connect)setRTimeout(){
+	if c.readTimeout != 0{
+		c.nc.SetReadDeadline(time.Now().Add(c.readTimeout))
+	}
+}
+
+//setWTimeout set net write timeout
+func (c *Connect)setWTimeout()  {
+	if c.writeTimeout != 0{
+		c.nc.SetWriteDeadline(time.Now().Add(c.writeTimeout))
+	}
+}
+
 //actionCommon common action for set add replace add cas
 func (c *Connect) actionCommon(rw *bufio.ReadWriter, act string, item *Item) (err error) {
 	var (
@@ -257,6 +288,7 @@ func (c *Connect) actionCommon(rw *bufio.ReadWriter, act string, item *Item) (er
 	if err != nil {
 		return err
 	}
+	c.setWTimeout()
 	if _, err = rw.Write(item.Value); err != nil {
 		return err
 	}
@@ -266,6 +298,7 @@ func (c *Connect) actionCommon(rw *bufio.ReadWriter, act string, item *Item) (er
 	if err := rw.Flush(); err != nil {
 		return err
 	}
+	c.setRTimeout()
 	line, err := rw.ReadSlice('\n')
 	if err != nil {
 		return err

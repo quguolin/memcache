@@ -11,8 +11,15 @@ type student struct {
 	Age    int
 }
 
+func newConfig() *Config {
+	return &Config{
+		host:host,
+		readTimeout:rTimeout,
+		writeTimeout:wTimeout,
+	}
+}
 func TestClient_Get(t *testing.T) {
-	c := NewClient(host)
+	c := NewClient(newConfig())
 	stu := &student{}
 	if err := c.Get("test").Scan(stu); err != nil {
 		panic(err)
@@ -26,7 +33,7 @@ func TestClient_Add(t *testing.T) {
 		Gender: "boy",
 		Age:    20,
 	}
-	c := NewClient(host)
+	c := NewClient(newConfig())
 	item := &Item{
 		Key:        "test",
 		Object:     s,
