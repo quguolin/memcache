@@ -316,13 +316,14 @@ func (c *Connect) actionCommon(rw *bufio.ReadWriter, act string, item *Item) (er
 	}
 	loop := length/_oneChunk + 1
 	var oneChunk []byte
+	key := item.Key
 	for i := 1; i <= loop; i++ {
 		if i == loop {
 			oneChunk = value[_oneChunk*(i-1):]
 		} else {
 			oneChunk = value[_oneChunk*(i-1) : _oneChunk*i]
 		}
-		item.Key = fmt.Sprintf("%s%d", item.Key, i)
+		item.Key = fmt.Sprintf("%s%d", key, i)
 		if err = c.actionCommonChunk(rw, act, item, oneChunk); err != nil {
 			return
 		}
