@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -36,6 +37,10 @@ const (
 	FlagRaw = 0
 	//FlagJson json value
 	FlagJson = 1
+	//_oneChunk 1MB
+	_oneChunk = 1000 * 1000 // 1MB
+	//_flagMuchChunk value more 1MB flag
+	_flagMuchChunk = uint32(1) << 30
 )
 
 // Connect is a memcache client.
@@ -300,7 +305,34 @@ func (c *Connect) actionCommon(rw *bufio.ReadWriter, act string, item *Item) (er
 	if value, err = c.encode(item); err != nil {
 		return
 	}
-	item.Value = value
+	//one chunk
+	if len(value) < _oneChunk {
+		return c.actionCommonChunk(rw, act, item, value)
+	}
+	length := len(value)
+	item.Flags = item.Flags | _flagMuchChunk
+	if err = c.actionCommonChunk(rw, act, item, []byte(strconv.Itoa(length))); err != nil {
+		return
+	}
+	loop := length/_oneChunk + 1
+	var oneChunk []byte
+	for i := 1; i <= loop; i++ {
+		if i == loop {
+			oneChunk = value[_oneChunk*(i-1):]
+		} else {
+			oneChunk = value[_oneChunk*(i-1) : _oneChunk*i]
+		}
+		item.Key = fmt.Sprintf("%s%d", item.Key, i)
+		if err = c.actionCommonChunk(rw, act, item, oneChunk); err != nil {
+			return
+		}
+	}
+	return
+}
+
+//actionCommon common action for set add replace add cas
+func (c *Connect) actionCommonChunk(rw *bufio.ReadWriter, act string, item *Item, chunk []byte) (err error) {
+	item.Value = chunk
 	if act == "cas" {
 		_, err = fmt.Fprintf(rw, "%s %s %d %d %d %d\r\n",
 			act, item.Key, item.Flags, item.Expiration, len(item.Value), item.Casid)

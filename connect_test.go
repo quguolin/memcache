@@ -7,9 +7,9 @@ import (
 )
 
 const (
-	host = "127.0.0.1:11211"
-	rTimeout = time.Duration(5*time.Millisecond)
-	wTimeout = time.Duration(5*time.Millisecond)
+	host     = "127.0.0.1:11211"
+	rTimeout = time.Duration(100 * time.Millisecond)
+	wTimeout = time.Duration(100 * time.Millisecond)
 )
 
 var (
@@ -22,9 +22,9 @@ var (
 
 func NewConnect() *Connect {
 	c, err := New(&Config{
-		host:host,
-		readTimeout:rTimeout,
-		writeTimeout:wTimeout,
+		host:         host,
+		readTimeout:  rTimeout,
+		writeTimeout: wTimeout,
 	})
 	if err != nil {
 		panic(err)
@@ -96,7 +96,7 @@ func TestConnect_Flush(t *testing.T) {
 		return
 	}
 	item, err = c.Get(key)
-	if err != nil {
+	if err != nil && err.Error() != string(resultNotFound) {
 		t.Errorf(err.Error())
 		return
 	}
@@ -238,7 +238,6 @@ func TestConnect_Replace(t *testing.T) {
 	t.Log("pass")
 }
 
-
 func TestConnect_Add(t *testing.T) {
 	c := NewConnect()
 	defer c.Close()
@@ -302,4 +301,26 @@ func TestConnect_Set(t *testing.T) {
 		return
 	}
 	t.Log("pass")
+}
+
+func TestConnect_AddMuti(t *testing.T) {
+	c := NewConnect()
+	defer c.Close()
+	err := c.Flush()
+	if err != nil {
+		t.Errorf(err.Error())
+		return
+	}
+	bs := bytes.Repeat([]byte(value), 1000000)
+	item := &Item{
+		Key:        key,
+		Value:      []byte(bs),
+		Flags:      FlagRaw,
+		Expiration: expire,
+	}
+	err = c.Add(item)
+	if err != nil {
+		t.Errorf(err.Error())
+		return
+	}
 }
