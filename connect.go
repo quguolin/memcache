@@ -17,6 +17,7 @@ var (
 	ErrNotStored   = errors.New("memcache: item not stored")
 	ErrCASConflict = errors.New("memcache: compare-and-swap conflict")
 	ErrCacheMiss   = errors.New("memcache: cache miss")
+	ErrInvalidKey  = errors.New("memcache: key is too long or contains invalid characters")
 )
 var (
 	crlf            = []byte("\r\n")
@@ -39,10 +40,10 @@ const (
 
 // Connect is a memcache client.
 type Connect struct {
-	nc net.Conn
-	readTimeout time.Duration
+	nc           net.Conn
+	readTimeout  time.Duration
 	writeTimeout time.Duration
-	rw *bufio.ReadWriter
+	rw           *bufio.ReadWriter
 	//ebuf json encode buf
 	ebuf bytes.Buffer
 	//je json encoder
@@ -55,8 +56,8 @@ type Connect struct {
 }
 
 type Config struct {
-	host string
-	readTimeout time.Duration
+	host         string
+	readTimeout  time.Duration
 	writeTimeout time.Duration
 }
 
@@ -66,14 +67,27 @@ func New(config *Config) (*Connect, error) {
 		return nil, err
 	}
 	c := &Connect{
-		nc: nc,
-		rw: bufio.NewReadWriter(bufio.NewReader(nc), bufio.NewWriter(nc)),
-		readTimeout:config.readTimeout,
-		writeTimeout:config.writeTimeout,
+		nc:           nc,
+		rw:           bufio.NewReadWriter(bufio.NewReader(nc), bufio.NewWriter(nc)),
+		readTimeout:  config.readTimeout,
+		writeTimeout: config.writeTimeout,
 	}
 	c.je = json.NewEncoder(&c.ebuf)
 	c.jd = json.NewDecoder(&c.jr)
 	return c, nil
+}
+
+//validate key
+func valKey(key string) bool {
+	if len(key) > 250 {
+		return false
+	}
+	for i := 0; i < len(key); i++ {
+		if key[i] <= ' ' || key[i] == 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 //Set set action
@@ -98,11 +112,14 @@ func (c *Connect) Cas(storeItem *Item) (err error) {
 
 //Get get action
 func (c *Connect) Get(key string) (i *Item, err error) {
+	if !valKey(key) {
+		return nil, ErrInvalidKey
+	}
 	err = c.actionGet(c.rw, []string{key}, func(item *Item) {
 		i = item
 	})
-	if i == nil{
-		return nil,fmt.Errorf(string(resultNotFound))
+	if i == nil {
+		return nil, fmt.Errorf(string(resultNotFound))
 	}
 	return
 }
@@ -124,6 +141,9 @@ func (c *Connect) Close() error {
 
 //Delete delete action
 func (c *Connect) Delete(key string) error {
+	if !valKey(key) {
+		return ErrInvalidKey
+	}
 	line, err := c.writeReadLine(c.rw, "delete %s\r\n", key)
 	if err != nil {
 		return err
@@ -146,7 +166,7 @@ func (c *Connect) Flush() error {
 	return fmt.Errorf(string(line))
 }
 
-func (c *Connect)writeReadLine(rw *bufio.ReadWriter, format string, args ...interface{}) ([]byte, error) {
+func (c *Connect) writeReadLine(rw *bufio.ReadWriter, format string, args ...interface{}) ([]byte, error) {
 	c.setWTimeout()
 	_, err := fmt.Fprintf(rw, format, args...)
 	if err != nil {
@@ -256,15 +276,15 @@ func (c *Connect) decode(item *Item, v interface{}) (err error) {
 }
 
 //setRTimeout set net read timeout
-func (c *Connect)setRTimeout(){
-	if c.readTimeout != 0{
+func (c *Connect) setRTimeout() {
+	if c.readTimeout != 0 {
 		c.nc.SetReadDeadline(time.Now().Add(c.readTimeout))
 	}
 }
 
 //setWTimeout set net write timeout
-func (c *Connect)setWTimeout()  {
-	if c.writeTimeout != 0{
+func (c *Connect) setWTimeout() {
+	if c.writeTimeout != 0 {
 		c.nc.SetWriteDeadline(time.Now().Add(c.writeTimeout))
 	}
 }
@@ -274,6 +294,9 @@ func (c *Connect) actionCommon(rw *bufio.ReadWriter, act string, item *Item) (er
 	var (
 		value []byte
 	)
+	if !valKey(item.Key) {
+		return ErrInvalidKey
+	}
 	if value, err = c.encode(item); err != nil {
 		return
 	}
