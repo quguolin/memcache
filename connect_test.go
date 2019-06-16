@@ -32,6 +32,41 @@ func NewConnect() *Connect {
 	return c
 }
 
+func TestConnect_Add(t *testing.T) {
+	c := NewConnect()
+	defer c.Close()
+	err := c.Flush()
+	if err != nil {
+		t.Errorf(err.Error())
+		return
+	}
+	item := &Item{
+		Key:        key,
+		Value:      []byte(value),
+		Flags:      FlagRaw,
+		Expiration: expire,
+	}
+	err = c.Add(item)
+	if err != nil {
+		t.Errorf(err.Error())
+		return
+	}
+	item, err = c.Get(key)
+	if err != nil {
+		t.Errorf(err.Error())
+		return
+	}
+	if item == nil {
+		t.Errorf("get null item")
+		return
+	}
+	if !bytes.Equal(item.Value, []byte(value)) {
+		t.Errorf("get item error")
+		return
+	}
+	t.Log("pass")
+}
+
 func TestConnect_Scan(t *testing.T) {
 	type student struct {
 		Name   string
@@ -95,15 +130,6 @@ func TestConnect_Flush(t *testing.T) {
 		t.Errorf(err.Error())
 		return
 	}
-	item, err = c.Get(key)
-	if err != nil && err.Error() != string(resultNotFound) {
-		t.Errorf(err.Error())
-		return
-	}
-	if item != nil {
-		t.Errorf("item is not flush")
-		return
-	}
 }
 
 func TestConnect_Delete(t *testing.T) {
@@ -126,7 +152,7 @@ func TestConnect_Delete(t *testing.T) {
 		return
 	}
 	item, err = c.Get(key)
-	if err != nil {
+	if err != nil && err != ErrNotFound {
 		t.Errorf(err.Error())
 		return
 	}
@@ -238,41 +264,6 @@ func TestConnect_Replace(t *testing.T) {
 	t.Log("pass")
 }
 
-func TestConnect_Add(t *testing.T) {
-	c := NewConnect()
-	defer c.Close()
-	err := c.Flush()
-	if err != nil {
-		t.Errorf(err.Error())
-		return
-	}
-	item := &Item{
-		Key:        key,
-		Value:      []byte(value),
-		Flags:      FlagRaw,
-		Expiration: expire,
-	}
-	err = c.Add(item)
-	if err != nil {
-		t.Errorf(err.Error())
-		return
-	}
-	item, err = c.Get(key)
-	if err != nil {
-		t.Errorf(err.Error())
-		return
-	}
-	if item == nil {
-		t.Errorf("get null item")
-		return
-	}
-	if !bytes.Equal(item.Value, []byte(value)) {
-		t.Errorf("get item error")
-		return
-	}
-	t.Log("pass")
-}
-
 func TestConnect_Set(t *testing.T) {
 	c := NewConnect()
 	defer c.Close()
@@ -311,7 +302,7 @@ func TestConnect_AddMuti(t *testing.T) {
 		t.Errorf(err.Error())
 		return
 	}
-	bs := bytes.Repeat([]byte(value), 1000000)
+	bs := bytes.Repeat([]byte(value), 100000)
 	item := &Item{
 		Key:        key,
 		Value:      []byte(bs),
@@ -322,5 +313,19 @@ func TestConnect_AddMuti(t *testing.T) {
 	if err != nil {
 		t.Errorf(err.Error())
 		return
+	}
+}
+
+func TestConnect_GetMulti(t *testing.T) {
+	c := NewConnect()
+	defer c.Close()
+	item, err := c.Get(key)
+	if err != nil {
+		t.Errorf(err.Error())
+		return
+	}
+	equV := bytes.Repeat([]byte(value), 100000)
+	if !bytes.Equal(item.Value, equV) {
+		t.Errorf("fail")
 	}
 }

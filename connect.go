@@ -16,6 +16,7 @@ import (
 
 var (
 	ErrNotStored   = errors.New("memcache: item not stored")
+	ErrNotFound    = errors.New("memcache: item not found")
 	ErrCASConflict = errors.New("memcache: compare-and-swap conflict")
 	ErrCacheMiss   = errors.New("memcache: cache miss")
 	ErrInvalidKey  = errors.New("memcache: key is too long or contains invalid characters")
@@ -116,15 +117,65 @@ func (c *Connect) Cas(storeItem *Item) (err error) {
 }
 
 //Get get action
-func (c *Connect) Get(key string) (i *Item, err error) {
+func (c *Connect) Get(key string) (item *Item, err error) {
 	if !valKey(key) {
 		return nil, ErrInvalidKey
 	}
-	err = c.actionGet(c.rw, []string{key}, func(item *Item) {
-		i = item
+	err = c.actionGet(c.rw, []string{key}, func(i *Item) {
+		item = i
 	})
-	if i == nil {
-		return nil, fmt.Errorf(string(resultNotFound))
+	if err != nil {
+		return
+	}
+	if item == nil {
+		return nil, ErrNotFound
+	}
+	if (item.Flags & _flagMuchChunk) != _flagMuchChunk {
+		return
+	}
+	length, err := strconv.Atoi(string(item.Value))
+	if err != nil {
+		return
+	}
+	loop := length/_oneChunk + 1
+	var (
+		keys  []string
+		items map[string]*Item
+	)
+	for i := 1; i <= loop; i++ {
+		keys = append(keys, fmt.Sprintf("%s%d", key, i))
+	}
+	if items, err = c.GetMulti(keys...); err != nil {
+		return
+	}
+	if len(items) != loop {
+		return nil, ErrNotFound
+	}
+	item.Value = make([]byte, 0, length)
+	for _, key := range keys {
+		v, ok := items[key]
+		if !ok || v == nil {
+			return nil, ErrNotFound
+		}
+		item.Value = append(item.Value, v.Value...)
+	}
+	item.Flags = item.Flags ^ _flagMuchChunk
+	return
+}
+
+//GetMulti get muti values
+func (c *Connect) GetMulti(keys ...string) (items map[string]*Item, err error) {
+	for _, key := range keys {
+		if !valKey(key) {
+			return items, ErrInvalidKey
+		}
+	}
+	items = make(map[string]*Item, len(keys))
+	err = c.actionGet(c.rw, keys, func(item *Item) {
+		items[item.Key] = item
+	})
+	if err != nil {
+		return
 	}
 	return
 }
